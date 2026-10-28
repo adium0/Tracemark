@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Integrity Theory</title>
+  <meta name="description" content="Local demo of the Integrity Theory deepfake detector: upload an image, get a verdict and see how the model reached it.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%23141414'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23ff5949'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script>
+    // Apply saved theme and calm mode before first paint (no flash).
+    (function () {
+      var d = document.documentElement, theme = null, calm = null;
+      try { theme = localStorage.getItem("it-theme"); calm = localStorage.getItem("it-calm"); } catch (e) {}
+      if (theme === "light" || theme === "dark") d.setAttribute("data-theme", theme);
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (calm === "on" || (calm === null && reduce)) d.classList.add("calm");
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">Integrity Theory</span>
+          <span class="spec">Deepfake detector · local demo</span>
+        </span>
+      </a>
+      <div class="header-actions">
+        <button type="button" id="theme-toggle" class="btn btn-ghost">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" class="fill"/></svg>
+          <span class="hide-sm">Theme: </span><span id="theme-label">Auto</span><span id="theme-hint" class="sr-only"> (match my device)</span>
+        </button>
+        <button type="button" id="calm-toggle" class="switch" role="switch" aria-checked="false">
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span class="switch-label">Calm mode</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="container hero" aria-labelledby="page-title">
+      <p class="spec">Quick-scan model v5.1 · runs on this computer</p>
+      <h1 id="page-title" class="hero-title">Real photo or <span class="accent-word">AI-generated?</span></h1>
+      <p class="lead">Upload an image to get the model's verdict and see how it got there. Every number and picture
+        below is computed by the model from your file. Nothing is sent anywhere else.</p>
+    </section>
+
+    <section class="container" aria-labelledby="upload-title">
+      <div class="card card-hero upload-card" id="upload-card">
+        <p class="spec">01 / Upload</p>
+        <h2 id="upload-title" class="card-title">Choose an image</h2>
+
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="file-input" class="sr-only" accept="image/jpeg,image/png,image/webp,image/bmp,image/gif,image/tiff,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff">
+          <label for="file-input" class="dropzone-label">
+            <svg class="icon icon-xl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+            <span class="drop-title" id="drop-title">Drag an image here</span>
+            <span class="drop-or">or</span>
+            <span class="btn btn-accent" aria-hidden="true">Choose an image</span>
+            <span class="sr-only">Choose an image to analyze</span>
+            <span class="spec drop-hint">JPEG · PNG · WebP · BMP · GIF · TIFF &nbsp;/&nbsp; max 20 MB · 40 MP</span>
+          </label>
+        </div>
+
+        <div class="selected" id="selected" hidden>
+          <div class="thumb-wrap">
+            <img id="preview" class="thumb" alt="">
+            <div class="thumb-fallback" id="preview-fallback" hidden>Preview not available in this browser. The model can still read the file.</div>
+            <div class="scan" aria-hidden="true"></div>
+          </div>
+          <div class="selected-info">
+            <p class="spec" id="file-meta"></p>
+            <p class="file-name" id="file-name"></p>
+            <div class="status" id="status" hidden>
+              <span class="status-pill"><span class="dot" aria-hidden="true"></span>Analyzing</span>
+              <span class="status-text">Running the model and building the explanation…</span>
+            </div>
+            <div class="selected-actions">
+              <button type="button" class="btn btn-secondary" id="choose-another">Choose another image</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="error" id="error" role="alert" hidden>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>
+          <div>
+            <p class="error-title">Can't analyze this file</p>
+            <p class="error-text" id="error-text"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container results" id="results" hidden aria-labelledby="results-title">
+      <h2 id="results-title" class="sr-only" tabindex="-1">Results</h2>
+
+      <!-- 02 Verdict -->
+      <article class="card verdict-card" id="verdict-card" aria-labelledby="verdict-heading">
+        <div class="verdict-top">
+          <div>
+            <p class="spec">02 / Verdict</p>
+            <h3 class="verdict-heading" id="verdict-heading">
+              <span class="verdict-badge" id="verdict-badge" aria-hidden="true"></span>
+              <span id="verdict-word"></span>
+            </h3>
+            <p class="verdict-sub" id="verdict-sub"></p>
+          </div>
+          <div class="verdict-conf">
+            <p class="spec">Confidence</p>
+            <p class="big-number" id="verdict-conf"></p>
+          </div>
+        </div>
+        <div class="prob">
+          <div class="prob-bar" id="prob-bar" role="img">
+            <span class="prob-seg prob-real" id="prob-real"></span>
+            <span class="prob-seg prob-fake" id="prob-fake"></span>
+            <span class="prob-mid" aria-hidden="true"></span>
+          </div>
+          <div class="prob-labels">
+            <span><span class="key key-real" aria-hidden="true"></span>P(real) <strong id="p-real"></strong></span>
+            <span class="prob-mid-label spec" aria-hidden="true">50% line</span>
+            <span><span class="key key-fake" aria-hidden="true"></span>P(fake) <strong id="p-fake"></strong></span>
+          </div>
+        </div>
+        <p class="spec timing" id="timing"></p>
+      </article>
+
+      <!-- 03 Summary -->
+      <article class="card" aria-labelledby="summary-heading">
+        <p class="spec">03 / In plain English</p>
+        <h3 class="card-title" id="summary-heading">How the model decided</h3>
+        <ul class="summary" id="summary"></ul>
+        <p class="fine">Written by fixed rules from the numbers on this page, not by a language model.</p>
+      </article>
+
+      <!-- 04 Evidence by branch -->
+      <article class="card" aria-labelledby="ablation-heading">
+        <p class="spec">04 / Evidence by branch</p>
+        <h3 class="card-title" id="ablation-heading">Which inputs pushed the score</h3>
+        <p class="body-text">The model combines three groups of inputs before its final layers. We re-ran those final
+          layers three more times, each time replacing one group with zeros, and measured how P(fake) changed.
+          If P(fake) drops without a group, that group <strong>pushed toward fake</strong>; if it rises, the group
+          <strong>pushed toward real</strong>.</p>
+        <div class="diverge" id="ablation-chart">
+          <div class="diverge-axis" aria-hidden="true">
+            <span class="axis-real">← pushed toward real</span>
+            <span class="axis-fake">pushed toward fake →</span>
+          </div>
+          <div id="ablation-rows"></div>
+          <div class="diverge-ticks" aria-hidden="true">
+            <span id="tick-min"></span><span>0</span><span id="tick-max"></span>
+          </div>
+        </div>
+        <details class="table-toggle">
+          <summary>Show as a table</summary>
+          <div class="table-scroll">
+            <table class="data-table">
+              <caption class="sr-only">Change in P(fake) when each input group is replaced with zeros</caption>
+              <thead><tr><th scope="col">Input group</th><th scope="col">Values</th><th scope="col">P(fake), all inputs</th><th scope="col">P(fake), group removed</th><th scope="col">Effect of the group</th></tr></thead>
+              <tbody id="ablation-table"></tbody>
+            </table>
+          </div>
+        </details>
+        <p class="fine">The three effects don't have to add up to P(fake): groups can overlap or depend on each other.
+          "Removed" means set to zero, which is a simple stand-in for "no information".</p>
+      </article>
+
+      <!-- 05 Provenance -->
+      <article class="card" aria-labelledby="prov-heading">
+        <p class="spec">05 / Provenance</p>
+        <h3 class="card-title" id="prov-heading">Metadata in the file</h3>
+        <p class="body-text">These two yes/no flags are the model's metadata input.</p>
+        <div class="prov-grid">
+          <div class="prov-tile" id="prov-exif"></div>
+          <div class="prov-tile" id="prov-c2pa"></div>
+        </div>
+      </article>
+
+      <!-- 06 Grad-CAM -->
+      <article class="card" aria-labelledby="cam-heading">
+        <p class="spec">06 / Grad-CAM · spatial branch</p>
+        <h3 class="card-title" id="cam-heading">Regions the spatial branch focused on</h3>
+        <div class="segmented" role="group" aria-label="Grad-CAM view">
+          <button type="button" class="seg" data-view="overlay" aria-pressed="true">Overlay</button>
+          <button type="button" class="seg" data-view="heatmap" aria-pressed="false">Heatmap only</button>
+          <button type="button" class="seg" data-view="image" aria-pressed="false">Image</button>
+        </div>
+        <figure class="figure">
+          <img id="cam-img" class="figure-img" alt="">
+          <figcaption>
+            <div class="legend" aria-hidden="true"><span>low</span><span class="legend-ramp"></span><span>high</span></div>
+            <p id="cam-caption"></p>
+          </figcaption>
+        </figure>
+      </article>
+
+      <!-- 07 Frequency -->
+      <article class="card" aria-labelledby="freq-heading">
+        <p class="spec">07 / Frequency branch</p>
+        <h3 class="card-title" id="freq-heading">What the frequency branch reads</h3>
+        <div class="freq-grid">
+          <figure class="figure">
+            <img id="freq-full" class="figure-img pixelated" alt="">
+            <figcaption id="freq-full-caption"></figcaption>
+          </figure>
+          <figure class="figure">
+            <img id="freq-crop" class="figure-img pixelated" alt="">
+            <figcaption id="freq-crop-caption"></figcaption>
+          </figure>
+        </div>
+      </article>
+
+      <!-- 08 ELA -->
+      <article class="card card-quiet" aria-labelledby="ela-heading">
+        <p class="spec">08 / ELA · extra view</p>
+        <h3 class="card-title" id="ela-heading">Error level analysis (ELA)</h3>
+        <p class="not-input"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+          Extra forensic view — not an input to this model</p>
+        <figure class="figure">
+          <img id="ela-img" class="figure-img" alt="">
+          <figcaption id="ela-caption"></figcaption>
+        </figure>
+      </article>
+
+      <!-- 09 Details -->
+      <article class="card" aria-labelledby="details-heading">
+        <p class="spec">09 / Details</p>
+        <h3 class="card-title" id="details-heading">Technical details</h3>
+        <dl class="details" id="details"></dl>
+      </article>
+
+      <div class="again">
+        <button type="button" class="btn btn-primary" id="analyze-another">Analyze another image</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p><strong>Student prototype. Quick-scan model (v5.1). Not reliable for spliced or edited images.</strong></p>
+      <p class="spec">Integrity Theory · IntegrityFusionModelV4 · CPU · local only</p>
+    </div>
+  </footer>
+
+  <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# torch and torchvision are installed first by run.sh / run.bat from the CPU-only index:
+#   https://download.pytorch.org/whl/cpu
+# Everything else comes from PyPI. All pins support Python 3.10 - 3.12.
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+pillow==12.3.0
+numpy==2.2.6 ; sys_platform != "darwin" or platform_machine != "x86_64"
+# Intel Macs only get torch 2.2.x, which was built against numpy 1.x
+numpy==1.26.4 ; sys_platform == "darwin" and platform_machine == "x86_64"
