@@ -1,4 +1,4 @@
-# Integrity Theory: local demo
+# Tracemark : local demo
 
 A small web app for the Integrity Theory deepfake detector. You upload an image and get the
 model's verdict (real or AI-generated) plus an explanation of how it got there. Everything
